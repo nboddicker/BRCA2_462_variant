@@ -1,0 +1,1518 @@
+---
+title: "BRCA2 450 Missense Lifetime Risk Summary"
+author: "Nicholas Boddicker"
+date: "1/10/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(readxl)
+library(arsenal)
+library(ggplot2)
+library(ggpubr)
+```
+
+This report uses SEER21 breast cancer rates (female) to estimate lifetime risk estimates for the BRCA2 450 missense project \
+SEER22 female NHW ovarian rates were used to estimate lifetime risk of ovarian cancer \
+These SEER rates are from NHW; therefore, the ORs used to estimate lifetime risk are from the NFE estimates \
+
+# CARRIERS Population-based breast cancer cases \
+```{r}
+setwd("/research/bsi/projects/breast/s108235.tripneg_Couch/projects/s108235.tripneg/breast_requests/CARRIERS/rpgm/BRCA2_450_missense/")
+#Seer_dat <- read.csv("BC_SEER_rates.csv", header = TRUE)  -- This dataset is from SEER21
+Seer_dat <- read.csv("SEER21_NHW_BC_Rates.csv", header = TRUE)
+
+Seer_dat <- Seer_dat %>% mutate(Neut.OR = 0.98, Del.OR = 2.20, Benign.OR = 0.98, Path.OR=2.45, Benign_Stan.OR=0.98, Path_Stan.OR=2.50, DBD_trun.OR=10.79, Ex11_trun.OR=4.48)
+
+Neut.LCI <- 0.85
+Neut.UCI <- 1.12
+Del.LCI <- 0.62
+Del.UCI <- 9.80
+Benign.LCI <- 0.85
+Benign.UCI <- 1.12
+Path.LCI <- 0.71
+Path.UCI <- 10.70
+Benign_Stan.LCI <- 0.85
+Benign_Stan.UCI <- 1.13
+Path_Stan.LCI <- 0.70
+Path_Stan.UCI <- 11.12
+DBD_trun.LCI <- 3.93
+DBD_trun.UCI <- 41.35
+Ex11_trun.LCI <- 3.17
+Ex11_trun.UCI <- 6.48
+
+```
+
+## Neutrals \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Neut.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative = cumsum(tmp4))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Neut.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Neut.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp = ave_rate*1)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp1 = death_rate + pop.tmp)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp2 = cumsum(pop.tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp3 = exp(-pop.tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp4 = pop.tmp*pop.tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.Cumulative = cumsum(pop.tmp4))
+
+Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = Neut.Cumulative, LCI=Neut.Cumulative.LCI, UCI=Neut.Cumulative.UCI) %>% mutate(Group = "Neutral Carrier", Gene = "Neut", Group2 = "Overall")
+pop.Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Neut", Group2 = "Overall")
+Neut.tmp2 <- rbind(Neut.tmp,pop.Neut.tmp)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Neutrals) \
+```{r}
+Neut.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Deleterious \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Del.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative = cumsum(tmp4))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Del.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Del.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Del.tmp <- Del.Abs.rsk %>% dplyr::select(Age, AR = Del.Cumulative, LCI=Del.Cumulative.LCI, UCI=Del.Cumulative.UCI) %>% mutate(Group = "Deleterious Carrier", Gene = "Del", Group2 = "Overall")
+pop.Del.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Del", Group2 = "Overall")
+Del.tmp2 <- rbind(Del.tmp,pop.Del.tmp)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Deleterious) \
+```{r}
+Del.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benigns \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative = cumsum(tmp4))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign.tmp <- Benign.Abs.rsk %>% dplyr::select(Age, AR = Benign.Cumulative, LCI=Benign.Cumulative.LCI, UCI=Benign.Cumulative.UCI) %>% mutate(Group = "Benign Carrier", Gene = "Benign", Group2 = "Overall")
+pop.Benign.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign", Group2 = "Overall")
+Benign.tmp2 <- rbind(Benign.tmp,pop.Benign.tmp)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benigns) \
+```{r}
+Benign.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative = cumsum(tmp4))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path.tmp <- Path.Abs.rsk %>% dplyr::select(Age, AR = Path.Cumulative, LCI=Path.Cumulative.LCI, UCI=Path.Cumulative.UCI) %>% mutate(Group = "Pathogenic Carrier", Gene = "Path", Group2 = "Overall")
+pop.Path.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path", Group2 = "Overall")
+Path.tmp2 <- rbind(Path.tmp,pop.Path.tmp)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic) \
+```{r}
+Path.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benign Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative = cumsum(tmp4))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign_Stan.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign_Stan.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign_Stan.tmp <- Benign_Stan.Abs.rsk %>% dplyr::select(Age, AR = Benign_Stan.Cumulative, LCI=Benign_Stan.Cumulative.LCI, UCI=Benign_Stan.Cumulative.UCI) %>% mutate(Group = "Benign Standard Carrier", Gene = "Benign_Stan", Group2 = "Overall")
+pop.Benign_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign_Stan", Group2 = "Overall")
+Benign_Stan.tmp2 <- rbind(Benign_Stan.tmp,pop.Benign_Stan.tmp)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benign Standard) \
+```{r}
+Benign_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative = cumsum(tmp4))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path_Stan.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path_Stan.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path_Stan.tmp <- Path_Stan.Abs.rsk %>% dplyr::select(Age, AR = Path_Stan.Cumulative, LCI=Path_Stan.Cumulative.LCI, UCI=Path_Stan.Cumulative.UCI) %>% mutate(Group = "Pathognic Standard Carrier", Gene = "Path_Stan", Group2 = "Overall")
+pop.Path_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path_Stan", Group2 = "Overall")
+Path_Stan.tmp2 <- rbind(Path_Stan.tmp,pop.Path_Stan.tmp)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+Path_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## DBD Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+DBD_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative = cumsum(tmp4))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*DBD_trun.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*DBD_trun.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+DBD_trun.tmp <- DBD_trun.Abs.rsk %>% dplyr::select(Age, AR = DBD_trun.Cumulative, LCI=DBD_trun.Cumulative.LCI, UCI=DBD_trun.Cumulative.UCI) %>% mutate(Group = "DBD truncating Carrier", Gene = "DBD_trun", Group2 = "Overall")
+pop.DBD_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "DBD_trun", Group2 = "Overall")
+DBD_trun.tmp2 <- rbind(DBD_trun.tmp,pop.DBD_trun.tmp)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+DBD_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Exon 11 Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Ex11_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative = cumsum(tmp4))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Ex11_trun.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Ex11_trun.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Ex11_trun.tmp <- Ex11_trun.Abs.rsk %>% dplyr::select(Age, AR = Ex11_trun.Cumulative, LCI=Ex11_trun.Cumulative.LCI, UCI=Ex11_trun.Cumulative.UCI) %>% mutate(Group = "Exon 11 truncating Carrier", Gene = "Ex11_trun", Group2 = "Overall")
+pop.Ex11_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Ex11_trun", Group2 = "Overall")
+Ex11_trun.tmp2 <- rbind(Ex11_trun.tmp,pop.Ex11_trun.tmp)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+Ex11_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+
+# Ambry BC
+```{r}
+#setwd("/research/bsi/projects/breast/s108235.tripneg_Couch/projects/s108235.tripneg/breast_requests/CARRIERS/rpgm/BRCA2_450_missense/")
+#Seer_dat <- read.csv("BC_SEER_rates.csv", header = TRUE)  -- This dataset is from SEER-18
+Seer_dat <- read.csv("SEER21_NHW_BC_Rates.csv", header = TRUE)
+
+Seer_dat <- Seer_dat %>% mutate(Neut.OR = 1.06, Del.OR = 8.34, Benign.OR = 1.06, Path.OR=9.03, Benign_Stan.OR=1.04, Path_Stan.OR=8.91, DBD_trun.OR=8.44, Ex11_trun.OR=5.05, Enigma.OR=9.93)
+
+Neut.LCI <- 0.97
+Neut.UCI <- 1.16
+Del.LCI <- 4.39
+Del.UCI <- 17.44
+Benign.LCI <- 0.97
+Benign.UCI <- 1.15
+Path.LCI <- 4.78
+Path.UCI <- 18.84
+Benign_Stan.LCI <- 0.95
+Benign_Stan.UCI <- 1.13
+Path_Stan.LCI <- 4.57
+Path_Stan.UCI <- 19.41
+DBD_trun.LCI <- 4.96
+DBD_trun.UCI <- 15.31
+Ex11_trun.LCI <- 4.07
+Ex11_trun.UCI <- 6.31
+Enigma.LCI <- 3.91
+Enigma.UCI <- 32.28
+
+# Enigma 
+# dat_OR <- data.frame(
+#   "Case" = c(39, 52056),
+#   "Control" = c(5, 66256),
+#   row.names = c("Mutation", "No Mutation"),
+#   stringsAsFactors = FALSE
+# )
+# #chisq.test(dat_OR)$expected
+# dat_OR
+# test <- fisher.test(dat_OR)
+# test
+
+
+
+```
+
+## Neutrals \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Neut.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative = cumsum(tmp4))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Neut.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Neut.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp = ave_rate*1)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp1 = death_rate + pop.tmp)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp2 = cumsum(pop.tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp3 = exp(-pop.tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp4 = pop.tmp*pop.tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.Cumulative = cumsum(pop.tmp4))
+
+Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = Neut.Cumulative, LCI=Neut.Cumulative.LCI, UCI=Neut.Cumulative.UCI) %>% mutate(Group = "Neutral Carrier", Gene = "Neut", Group2 = "Overall")
+pop.Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Neut", Group2 = "Overall")
+Neut.tmp2 <- rbind(Neut.tmp,pop.Neut.tmp)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Neutrals) \
+```{r}
+Neut.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Deleterious \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Del.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative = cumsum(tmp4))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Del.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Del.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Del.tmp <- Del.Abs.rsk %>% dplyr::select(Age, AR = Del.Cumulative, LCI=Del.Cumulative.LCI, UCI=Del.Cumulative.UCI) %>% mutate(Group = "Deleterious Carrier", Gene = "Del", Group2 = "Overall")
+pop.Del.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Del", Group2 = "Overall")
+Del.tmp2 <- rbind(Del.tmp,pop.Del.tmp)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Deleterious) \
+```{r}
+Del.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benigns \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative = cumsum(tmp4))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign.tmp <- Benign.Abs.rsk %>% dplyr::select(Age, AR = Benign.Cumulative, LCI=Benign.Cumulative.LCI, UCI=Benign.Cumulative.UCI) %>% mutate(Group = "ACMG benign missense", Gene = "Benign", Group2 = "Overall")
+pop.Benign.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign", Group2 = "Overall")
+Benign.tmp2 <- rbind(Benign.tmp,pop.Benign.tmp)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benigns) \
+```{r}
+Benign.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative = cumsum(tmp4))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path.tmp <- Path.Abs.rsk %>% dplyr::select(Age, AR = Path.Cumulative, LCI=Path.Cumulative.LCI, UCI=Path.Cumulative.UCI) %>% mutate(Group = "ACMG pathogenic missense", Gene = "Path", Group2 = "Overall")
+pop.Path.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path", Group2 = "Overall")
+Path.tmp2 <- rbind(Path.tmp,pop.Path.tmp)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic) \
+```{r}
+Path.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benign Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative = cumsum(tmp4))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign_Stan.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign_Stan.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign_Stan.tmp <- Benign_Stan.Abs.rsk %>% dplyr::select(Age, AR = Benign_Stan.Cumulative, LCI=Benign_Stan.Cumulative.LCI, UCI=Benign_Stan.Cumulative.UCI) %>% mutate(Group = "Benign Standard Carrier", Gene = "Benign_Stan", Group2 = "Overall")
+pop.Benign_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign_Stan", Group2 = "Overall")
+Benign_Stan.tmp2 <- rbind(Benign_Stan.tmp,pop.Benign_Stan.tmp)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benign Standard) \
+```{r}
+Benign_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative = cumsum(tmp4))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path_Stan.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path_Stan.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path_Stan.tmp <- Path_Stan.Abs.rsk %>% dplyr::select(Age, AR = Path_Stan.Cumulative, LCI=Path_Stan.Cumulative.LCI, UCI=Path_Stan.Cumulative.UCI) %>% mutate(Group = "Pathognic Standard Carrier", Gene = "Path_Stan", Group2 = "Overall")
+pop.Path_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path_Stan", Group2 = "Overall")
+Path_Stan.tmp2 <- rbind(Path_Stan.tmp,pop.Path_Stan.tmp)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+Path_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## DBD Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+DBD_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative = cumsum(tmp4))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*DBD_trun.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*DBD_trun.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+DBD_trun.tmp <- DBD_trun.Abs.rsk %>% dplyr::select(Age, AR = DBD_trun.Cumulative, LCI=DBD_trun.Cumulative.LCI, UCI=DBD_trun.Cumulative.UCI) %>% mutate(Group = "DBD truncating", Gene = "DBD_trun", Group2 = "Overall")
+pop.DBD_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "DBD_trun", Group2 = "Overall")
+DBD_trun.tmp2 <- rbind(DBD_trun.tmp,pop.DBD_trun.tmp)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+DBD_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Exon 11 Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Ex11_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative = cumsum(tmp4))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Ex11_trun.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Ex11_trun.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Ex11_trun.tmp <- Ex11_trun.Abs.rsk %>% dplyr::select(Age, AR = Ex11_trun.Cumulative, LCI=Ex11_trun.Cumulative.LCI, UCI=Ex11_trun.Cumulative.UCI) %>% mutate(Group = "Exon 11 truncating", Gene = "Ex11_trun", Group2 = "Overall")
+pop.Ex11_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Ex11_trun", Group2 = "Overall")
+Ex11_trun.tmp2 <- rbind(Ex11_trun.tmp,pop.Ex11_trun.tmp)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Exon 11 Truncating) \
+```{r}
+Ex11_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Enigma Standard Pathogenic \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Enigma.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Enigma.OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Enigma.OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative = cumsum(tmp4))
+
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Enigma.LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Enigma.UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Enigma.tmp <- Enigma.Abs.rsk %>% dplyr::select(Age, AR = Enigma.Cumulative, LCI=Enigma.Cumulative.LCI, UCI=Enigma.Cumulative.UCI) %>% mutate(Group = "ENIGMA standard pathogenic missense", Gene = "Enigma", Group2 = "Overall")
+pop.Enigma.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Enigma", Group2 = "Overall")
+Enigma.tmp2 <- rbind(Enigma.tmp,pop.Enigma.tmp)
+
+ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Enigma Standard Pathogenic) \
+```{r}
+Enigma.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+```{r, warning=FALSE}
+Comb.tmp2 <- rbind(Benign.tmp, Path.tmp, DBD_trun.tmp, Ex11_trun.tmp, Enigma.tmp,pop.Enigma.tmp)
+
+t <- ggplot(Comb.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1) +
+  ylab("Absolute risk of breast cancer") +
+  xlab("Age (Years)") +
+  theme_classic() +
+  theme(legend.position = c(0.3,0.75))
+
+t
+```
+
+
+
+
+
+# Ambry OC \
+Rates are based on SEER-22 NHW female \
+```{r}
+#setwd("/research/bsi/projects/breast/s108235.tripneg_Couch/projects/s108235.tripneg/breast_requests/CARRIERS/rpgm/BRCA2_450_missense/")
+#Seer_dat <- read.csv("BC_SEER_rates.csv", header = TRUE)  -- This dataset is from SEER-18
+Seer_dat <- read.csv("SEER22_NHW_OC_Rates.csv", header = TRUE)
+
+Seer_dat <- Seer_dat %>% mutate(Neut.OR = 1.13, Del.OR = 15.53, Benign.OR = 1.12, Path.OR=14.75, Benign_Stan.OR=1.09, Path_Stan.OR=15.37, DBD_trun.OR=14.97, Ex11_trun.OR=13.45, Enigma.OR=8.53)
+
+Neut.LCI <- 0.95
+Neut.UCI <- 1.34
+Del.LCI <- 7.09
+Del.UCI <- 35.93
+Benign.LCI <- 0.94
+Benign.UCI <- 1.33
+Path.LCI <- 6.67
+Path.UCI <- 34.34
+Benign_Stan.LCI <- 0.91
+Benign_Stan.UCI <- 1.30
+Path_Stan.LCI <- 6.73
+Path_Stan.UCI <- 37.29
+DBD_trun.LCI <- 7.82
+DBD_trun.UCI <- 29.62
+Ex11_trun.LCI <- 10.46
+Ex11_trun.UCI <- 17.36
+Enigma.LCI <- 1.96
+Enigma.UCI <- 37.05
+
+# Enigma 
+# dat_OR <- data.frame(
+#   "Case" = c(39, 52056),
+#   "Control" = c(5, 66256),
+#   row.names = c("Mutation", "No Mutation"),
+#   stringsAsFactors = FALSE
+# )
+# #chisq.test(dat_OR)$expected
+# dat_OR
+# test <- fisher.test(dat_OR)
+# test
+
+
+
+```
+
+## Neutrals \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Neut.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Neut.OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative = cumsum(tmp4))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Neut.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Neut.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(Neut.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp = ave_rate*1)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp1 = death_rate + pop.tmp)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp2 = cumsum(pop.tmp1))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp3 = exp(-pop.tmp2))
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.tmp4 = pop.tmp*pop.tmp3)
+Neut.Abs.rsk <- Neut.Abs.rsk %>% mutate(pop.Cumulative = cumsum(pop.tmp4))
+
+Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = Neut.Cumulative, LCI=Neut.Cumulative.LCI, UCI=Neut.Cumulative.UCI) %>% mutate(Group = "Neutral Carrier", Gene = "Neut", Group2 = "Overall")
+pop.Neut.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Neut", Group2 = "Overall")
+Neut.tmp2 <- rbind(Neut.tmp,pop.Neut.tmp)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Neut.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Neutrals) \
+```{r}
+Neut.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Deleterious \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Del.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Del.OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative = cumsum(tmp4))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Del.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Del.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Del.Abs.rsk <- Del.Abs.rsk %>% mutate(Del.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Del.tmp <- Del.Abs.rsk %>% dplyr::select(Age, AR = Del.Cumulative, LCI=Del.Cumulative.LCI, UCI=Del.Cumulative.UCI) %>% mutate(Group = "Deleterious Carrier", Gene = "Del", Group2 = "Overall")
+pop.Del.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Del", Group2 = "Overall")
+Del.tmp2 <- rbind(Del.tmp,pop.Del.tmp)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Del.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Deleterious) \
+```{r}
+Del.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benigns \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign.OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative = cumsum(tmp4))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign.Abs.rsk <- Benign.Abs.rsk %>% mutate(Benign.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign.tmp <- Benign.Abs.rsk %>% dplyr::select(Age, AR = Benign.Cumulative, LCI=Benign.Cumulative.LCI, UCI=Benign.Cumulative.UCI) %>% mutate(Group = "ACMG benign missense", Gene = "Benign", Group2 = "Overall")
+pop.Benign.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign", Group2 = "Overall")
+Benign.tmp2 <- rbind(Benign.tmp,pop.Benign.tmp)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benigns) \
+```{r}
+Benign.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path.OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative = cumsum(tmp4))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path.Abs.rsk <- Path.Abs.rsk %>% mutate(Path.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path.tmp <- Path.Abs.rsk %>% dplyr::select(Age, AR = Path.Cumulative, LCI=Path.Cumulative.LCI, UCI=Path.Cumulative.UCI) %>% mutate(Group = "ACMG pathogenic missense", Gene = "Path", Group2 = "Overall")
+pop.Path.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path", Group2 = "Overall")
+Path.tmp2 <- rbind(Path.tmp,pop.Path.tmp)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic) \
+```{r}
+Path.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Benign Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Benign_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Benign_Stan.OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative = cumsum(tmp4))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Benign_Stan.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Benign_Stan.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Benign_Stan.Abs.rsk <- Benign_Stan.Abs.rsk %>% mutate(Benign_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Benign_Stan.tmp <- Benign_Stan.Abs.rsk %>% dplyr::select(Age, AR = Benign_Stan.Cumulative, LCI=Benign_Stan.Cumulative.LCI, UCI=Benign_Stan.Cumulative.UCI) %>% mutate(Group = "Benign Standard Carrier", Gene = "Benign_Stan", Group2 = "Overall")
+pop.Benign_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Benign_Stan", Group2 = "Overall")
+Benign_Stan.tmp2 <- rbind(Benign_Stan.tmp,pop.Benign_Stan.tmp)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Benign_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Benign Standard) \
+```{r}
+Benign_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Pathogenic Standard \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Path_Stan.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Path_Stan.OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative = cumsum(tmp4))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Path_Stan.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Path_Stan.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Path_Stan.Abs.rsk <- Path_Stan.Abs.rsk %>% mutate(Path_Stan.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Path_Stan.tmp <- Path_Stan.Abs.rsk %>% dplyr::select(Age, AR = Path_Stan.Cumulative, LCI=Path_Stan.Cumulative.LCI, UCI=Path_Stan.Cumulative.UCI) %>% mutate(Group = "Pathognic Standard Carrier", Gene = "Path_Stan", Group2 = "Overall")
+pop.Path_Stan.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Path_Stan", Group2 = "Overall")
+Path_Stan.tmp2 <- rbind(Path_Stan.tmp,pop.Path_Stan.tmp)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Path_Stan.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+Path_Stan.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## DBD Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+DBD_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*DBD_trun.OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative = cumsum(tmp4))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*DBD_trun.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*DBD_trun.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+DBD_trun.Abs.rsk <- DBD_trun.Abs.rsk %>% mutate(DBD_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+DBD_trun.tmp <- DBD_trun.Abs.rsk %>% dplyr::select(Age, AR = DBD_trun.Cumulative, LCI=DBD_trun.Cumulative.LCI, UCI=DBD_trun.Cumulative.UCI) %>% mutate(Group = "DBD truncating", Gene = "DBD_trun", Group2 = "Overall")
+pop.DBD_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "DBD_trun", Group2 = "Overall")
+DBD_trun.tmp2 <- rbind(DBD_trun.tmp,pop.DBD_trun.tmp)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(DBD_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Pathogenic Standard) \
+```{r}
+DBD_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Exon 11 Truncating \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Ex11_trun.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Ex11_trun.OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative = cumsum(tmp4))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Ex11_trun.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Ex11_trun.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Ex11_trun.Abs.rsk <- Ex11_trun.Abs.rsk %>% mutate(Ex11_trun.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Ex11_trun.tmp <- Ex11_trun.Abs.rsk %>% dplyr::select(Age, AR = Ex11_trun.Cumulative, LCI=Ex11_trun.Cumulative.LCI, UCI=Ex11_trun.Cumulative.UCI) %>% mutate(Group = "Exon 11 truncating", Gene = "Ex11_trun", Group2 = "Overall")
+pop.Ex11_trun.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Ex11_trun", Group2 = "Overall")
+Ex11_trun.tmp2 <- rbind(Ex11_trun.tmp,pop.Ex11_trun.tmp)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Ex11_trun.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Exon 11 Truncating) \
+```{r}
+Ex11_trun.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+## Enigma Standard Pathogenic \
+```{r}
+#cumsum(Seer_dat$ave_rate)
+Enigma.Abs.rsk <- Seer_dat %>% dplyr::select(Age, ave_rate, death_rate, Enigma.OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR = ave_rate*Enigma.OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1 = death_rate + AgeRate_by_OR)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2 = cumsum(tmp1))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3 = exp(-tmp2))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4 = AgeRate_by_OR * tmp3)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative = cumsum(tmp4))
+
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR_LCI = ave_rate*Enigma.LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1.LCI = death_rate + AgeRate_by_OR_LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2.LCI = cumsum(tmp1.LCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3.LCI = exp(-tmp2.LCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4.LCI = AgeRate_by_OR_LCI * tmp3.LCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative.LCI = cumsum(tmp4.LCI))
+
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(AgeRate_by_OR_UCI = ave_rate*Enigma.UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp1.UCI = death_rate + AgeRate_by_OR_UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp2.UCI = cumsum(tmp1.UCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp3.UCI = exp(-tmp2.UCI))
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(tmp4.UCI = AgeRate_by_OR_UCI * tmp3.UCI)
+Enigma.Abs.rsk <- Enigma.Abs.rsk %>% mutate(Enigma.Cumulative.UCI = cumsum(tmp4.UCI))
+
+Enigma.tmp <- Enigma.Abs.rsk %>% dplyr::select(Age, AR = Enigma.Cumulative, LCI=Enigma.Cumulative.LCI, UCI=Enigma.Cumulative.UCI) %>% mutate(Group = "ENIGMA standard pathogenic missense", Gene = "Enigma", Group2 = "Overall")
+pop.Enigma.tmp <- Neut.Abs.rsk %>% dplyr::select(Age, AR = pop.Cumulative) %>% mutate(LCI=AR, UCI=AR, Group = "Population", Gene = "Enigma", Group2 = "Overall")
+Enigma.tmp2 <- rbind(Enigma.tmp,pop.Enigma.tmp)
+
+ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+  geom_ribbon(aes(ymin = LCI, ymax = UCI), linetype=0, fill = "grey80") +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,1)
+
+
+# ggplot(Enigma.tmp2, aes(Age, AR, colour = Group)) +
+#   geom_line()
+```
+
+### Lifetime risk estimates to age 80 (Enigma Standard Pathogenic) \
+```{r}
+Enigma.tmp2 %>% filter(Age==80) %>% dplyr::select(Age, Abs_Risk=AR, Group)
+
+```
+
+```{r, warning=FALSE}
+#Comb.tmp2 <- rbind(Benign.tmp, Path.tmp, DBD_trun.tmp, Ex11_trun.tmp, Enigma.tmp,pop.Enigma.tmp)
+Comb.tmp2 <- rbind(Benign.tmp, Path.tmp, DBD_trun.tmp, Ex11_trun.tmp,pop.Enigma.tmp)
+
+t <- ggplot(Comb.tmp2, aes(Age, AR, colour = Group)) +
+  geom_line(aes(y=AR)) +
+  xlim(20,80) + 
+  ylim(0,0.5) +
+  ylab("Absolute risk of ovarian cancer") +
+  xlab("Age (Years)") +
+  theme_classic() +
+  theme(legend.position = c(0.2,0.75))
+
+t
+```
+
