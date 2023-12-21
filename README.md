@@ -1,7 +1,7 @@
 # BRCA2_450_variant
 Analyses for evaluation of BRCA2 missense variants
 
-This repository contains code used to generate results/figures for journal article titled: "Functional analysis and clinical classification of 462 germline BRCA2 DNA binding domain missense variants".
+This repository contains description of methods and code used to generate results/figures for journal article titled: "Functional analysis and clinical classification of 462 germline BRCA2 DNA binding domain missense variants".
 
 Two directories are available
 
